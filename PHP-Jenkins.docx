@@ -1,0 +1,79 @@
+pipeline {
+    agent any  // Run the pipeline on any available agent
+
+    environment {
+        EC2_SSH_HOST = 'your-ec2-ip-or-hostname'  // EC2 instance IP or hostname
+        EC2_SSH_USER = 'ubuntu'  // EC2 SSH user (adjust if using different user)
+        EC2_SSH_KEY = credentials('EC2_SSH_KEY')  // Load the SSH private key from Jenkins credentials
+        DB_PASSWORD = credentials('DB_PASSWORD')  // Load the database password from Jenkins credentials
+        REMOTE_DIR = '/var/www/php-app'  // Directory on EC2 where the app will be deployed
+        GIT_REPO_URL = 'https://github.com/your-repository/php-app.git'  // Your Git repository URL
+        PHP_VERSION = '7.4'  // Define the PHP version (adjust if needed)
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Checkout the code from your Git repository
+                git url: "${GIT_REPO_URL}", branch: 'main'
+            }
+        }
+
+        stage('Install SSH Client') {
+            steps {
+                // Install the SSH client on the Jenkins agent (only necessary if SSH is not installed)
+                sh 'sudo apt-get update && sudo apt-get install -y sshpass'
+            }
+        }
+
+        stage('Install PHP and Composer') {
+            steps {
+                // Install PHP and Composer on the Jenkins agent (if not already installed)
+                sh """
+                    sudo apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-cli php${PHP_VERSION}-fpm php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml php${PHP_VERSION}-mysql
+                    curl -sS https://getcomposer.org/installer | php
+                    sudo mv composer.phar /usr/local/bin/composer
+                """
+            }
+        }
+
+        stage('Install App Dependencies') {
+            steps {
+                // Install the PHP app dependencies using Composer
+                sh 'composer install --no-dev --optimize-autoloader'
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                script {
+                    // Use SSH to connect to the EC2 instance and deploy the PHP app
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -i ${EC2_SSH_KEY} ${EC2_SSH_USER}@${EC2_SSH_HOST} '
+                        cd ${REMOTE_DIR} || git clone ${GIT_REPO_URL} ${REMOTE_DIR}
+                        cd ${REMOTE_DIR}
+                        git pull  # Pull the latest code
+                        cp .env.example .env  # Copy the example .env file (adjust if needed)
+                        echo "DB_PASSWORD=${DB_PASSWORD}" >> .env  # Inject the DB_PASSWORD from secrets into .env
+                        composer install  # Install dependencies using Composer
+                        php artisan key:generate  # Generate the application key
+                        php artisan migrate --force  # Run any database migrations
+                        php artisan config:cache  # Cache the configuration
+                        php artisan route:cache  # Cache the routes
+                        sudo systemctl restart apache2  # Restart Apache to apply changes (if using Apache)
+                        '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful!"
+        }
+        failure {
+            echo "Deployment failed!"
+        }
+    }
+}
