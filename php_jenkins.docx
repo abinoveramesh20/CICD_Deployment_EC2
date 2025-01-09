@@ -1,0 +1,60 @@
+pipeline {
+    agent any  // Run the pipeline on any available agent
+
+    environment {
+        EC2_SSH_HOST = 'your-ec2-ip-or-hostname'  // Set the EC2 IP address or hostname
+        EC2_SSH_USER = 'ubuntu'  // EC2 SSH user (adjust if using a different user)
+        EC2_SSH_KEY = credentials('EC2_SSH_KEY')  // Load the SSH key from Jenkins credentials
+        REMOTE_DIR = '/var/www/html/php-app'  // Directory on EC2 where the app will be deployed
+        GIT_REPO_URL = 'https://github.com/your-repository/php-app.git'  // Your Git repository URL
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Checkout the code from your Git repository
+                git url: "${GIT_REPO_URL}", branch: 'main'
+            }
+        }
+
+        stage('Install SSH Client') {
+            steps {
+                // Install the SSH client on the Jenkins agent (only necessary if SSH is not installed)
+                sh 'sudo apt-get update && sudo apt-get install -y sshpass'
+            }
+        }
+
+        stage('Install PHP Dependencies') {
+            steps {
+                // Install PHP dependencies using Composer (assuming composer.json is available in your repo)
+                sh 'composer install'
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                script {
+                    // Use SSH to connect to the EC2 instance and deploy the PHP app
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -i ${EC2_SSH_KEY} ${EC2_SSH_USER}@${EC2_SSH_HOST} '
+                        cd ${REMOTE_DIR} || git clone ${GIT_REPO_URL} ${REMOTE_DIR}
+                        cd ${REMOTE_DIR}
+                        git pull  # Pull the latest code
+                        composer install  # Install any dependencies
+                        sudo systemctl restart apache2  # Restart Apache to apply changes
+                        '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful!"
+        }
+        failure {
+            echo "Deployment failed!"
+        }
+    }
+}
