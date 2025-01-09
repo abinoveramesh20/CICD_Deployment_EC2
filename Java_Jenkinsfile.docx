@@ -1,58 +1,46 @@
 pipeline {
     agent any
 
-    tools {
-        // Define the JDK and Maven installations in Jenkins.
-        jdk 'JDK_11'  // JDK_11 is the name given in Global Tool Configuration
-        maven 'Maven_3'  // Maven_3 is the name given in Global Tool Configuration
-    }
-
     environment {
-        // Optional: Define any environment variables needed
-        APP_NAME = 'my-java-app'
-        DEPLOY_DIR = '/opt/tomcat/webapps'
+        // Using Jenkins Secrets for sensitive data
+        EC2_SSH_HOST = credentials('EC2_SSH_HOST')  // The EC2 host IP or hostname stored as a secret
+        EC2_SSH_USER = 'ubuntu'  // Default SSH user for EC2 instances, adjust if necessary
+        EC2_SSH_KEY_PATH = credentials('ec2-ssh-key')  // Path to the SSH private key stored in Jenkins
+        REMOTE_DIR = '/home/ubuntu/java-app/'  // Remote directory on EC2 where the app should go
+        JAR_FILE = 'target/your-app.jar'  // Path to the built JAR file
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Checkout the project code from your repository
-                git 'https://github.com/your-username/your-java-repo.git'
+                // Checkout the code from the repository
+                git 'https://github.com/your-repository/your-java-app.git'
             }
         }
 
         stage('Build') {
             steps {
-                // Run Maven build to compile the Java application
-                sh 'mvn clean install'
+                // Build the Java application (assuming Maven is used)
+                script {
+                    sh 'mvn clean install'
+                }
             }
         }
 
-        stage('Test') {
+        stage('Deploy to EC2') {
             steps {
-                // Run tests with Maven
-                sh 'mvn test'
+                script {
+                    // Copy JAR to EC2 instance using SCP (Secure Copy)
+                    sh """
+                    scp -i ${EC2_SSH_KEY_PATH} ${JAR_FILE} ${EC2_SSH_USER}@${EC2_SSH_HOST}:${REMOTE_DIR}
+                    """
+                    
+                    // Run the application on the EC2 instance using SSH
+                    sh """
+                    ssh -i ${EC2_SSH_KEY_PATH} ${EC2_SSH_USER}@${EC2_SSH_HOST} 'nohup java -jar ${REMOTE_DIR}/your-app.jar > /dev/null 2>&1 &'
+                    """
+                }
             }
-        }
-
-        stage('Deploy') {
-            steps {
-                // Deploy the WAR file to a remote server (Tomcat example)
-                sh """
-                scp target/$APP_NAME.war user@your-server:/opt/tomcat/webapps/
-                """
-            }
-        }
-    }
-
-    post {
-        success {
-            // Action to take after successful build
-            echo "Build and deployment successful!"
-        }
-        failure {
-            // Action to take after failure
-            echo "Build failed!"
         }
     }
 }
