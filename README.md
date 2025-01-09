@@ -1,4 +1,5 @@
 ##Steps to Store Sensitive Information as Secrets in Jenkins
+---
 1. Access Jenkins Credentials Section
 Open your Jenkins dashboard in a web browser.
 From the Jenkins homepage, go to Manage Jenkins.
@@ -11,7 +12,6 @@ Click on (global) or any other domain where you want to store the credentials.
 Click Add Credentials on the left sidebar.
 4. Choose the Credential Type
 You will be presented with different types of credentials you can store:
----
 ##Username with Password: Store a username and password (e.g., for databases, APIs).
 SSH Username with Private Key: Store an SSH username and private key (e.g., for SSH access to servers or EC2 instances).
 Secret Text: Store a plain text secret (e.g., API keys, tokens).
@@ -31,3 +31,9 @@ ID: Provide a unique ID for the secret (e.g., DB_PASSWORD for a database passwor
 After entering the necessary details, click OK to save the credentials.
 
 Now your sensitive information is securely stored in Jenkins and can be accessed by Jenkins jobs or pipelines.
+
+
+
+---
+
+
