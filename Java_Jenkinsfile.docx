@@ -1,46 +1,38 @@
-pipeline {
-    agent any
+name: Deploy to EC2
 
-    environment {
-        // Using Jenkins Secrets for sensitive data
-        EC2_SSH_HOST = credentials('EC2_SSH_HOST')  // The EC2 host IP or hostname stored as a secret
-        EC2_SSH_USER = 'ubuntu'  // Default SSH user for EC2 instances, adjust if necessary
-        EC2_SSH_KEY_PATH = credentials('ec2-ssh-key')  // Path to the SSH private key stored in Jenkins
-        REMOTE_DIR = '/home/ubuntu/java-app/'  // Remote directory on EC2 where the app should go
-        JAR_FILE = 'target/your-app.jar'  // Path to the built JAR file
-    }
+on:
+  push:
+    branches:
+      - main  # Trigger deployment when changes are pushed to the main branch
 
-    stages {
-        stage('Checkout') {
-            steps {
-                // Checkout the code from the repository
-                git 'https://github.com/your-repository/your-java-app.git'
-            }
-        }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu environment in GitHub Actions
 
-        stage('Build') {
-            steps {
-                // Build the Java application (assuming Maven is used)
-                script {
-                    sh 'mvn clean install'
-                }
-            }
-        }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3  # Checkout the code from the repository
 
-        stage('Deploy to EC2') {
-            steps {
-                script {
-                    // Copy JAR to EC2 instance using SCP (Secure Copy)
-                    sh """
-                    scp -i ${EC2_SSH_KEY_PATH} ${JAR_FILE} ${EC2_SSH_USER}@${EC2_SSH_HOST}:${REMOTE_DIR}
-                    """
-                    
-                    // Run the application on the EC2 instance using SSH
-                    sh """
-                    ssh -i ${EC2_SSH_KEY_PATH} ${EC2_SSH_USER}@${EC2_SSH_HOST} 'nohup java -jar ${REMOTE_DIR}/your-app.jar > /dev/null 2>&1 &'
-                    """
-                }
-            }
-        }
-    }
-}
+      - name: Install SSH Client
+        run: sudo apt-get install -y sshpass  # Install SSH client on the GitHub Actions runner
+
+      - name: Add SSH Key
+        uses: webfactory/ssh-agent@v0.7.0  # Add the SSH key stored in GitHub Secrets
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}  # Secret SSH private key for EC2 access
+
+      - name: Set up Docker Compose (optional)
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version  # Check if Docker Compose is installed correctly
+
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_IP }} '
+          cd /home/ubuntu/java-app || git clone https://github.com/your-repository/java-app.git /home/ubuntu/java-app
+          cd /home/ubuntu/java-app
+          git pull  # Pull the latest changes from the repository
+          docker-compose down  # Stop the existing containers
+          docker-compose up -d --build  # Build and start containers in detached mode
+          '
