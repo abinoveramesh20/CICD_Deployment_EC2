@@ -1,3 +1,16 @@
+#Storing Secrets in Jenkins:
+#EC2_SSH_KEY: Store the private SSH key for accessing the EC2 instance. Use credentials('EC2_SSH_KEY') to reference it in the pipeline.
+#DB_PASSWORD: Store any sensitive data like database passwords or API keys in Jenkins secrets. Reference them using credentials('DB_PASSWORD') or other identifiers based on what you store.
+#Setting Up Jenkins Secrets:
+#Go to Jenkins Dashboard.
+#Navigate to Manage Jenkins > Manage Credentials.
+#Add a new SSH Username with private key credential for EC2_SSH_KEY or a Secret Text for DB_PASSWORD.
+#Use these credentials in the Jenkinsfile as shown above.
+
+
+
+
+
 pipeline {
     agent any  // Run the pipeline on any available agent
 
