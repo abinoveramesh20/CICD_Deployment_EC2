@@ -1,0 +1,80 @@
+pipeline {
+    agent any  // Run the pipeline on any available agent
+
+    environment {
+        EC2_SSH_HOST = 'your-ec2-ip-or-hostname'  // EC2 instance IP or hostname
+        EC2_SSH_USER = 'ubuntu'  // EC2 SSH user (adjust if using different user)
+        EC2_SSH_KEY = credentials('EC2_SSH_KEY')  // Load the SSH private key from Jenkins credentials
+        DB_PASSWORD = credentials('DB_PASSWORD')  // Load the database password from Jenkins credentials
+        REMOTE_DIR = '/var/www/python-app'  // Directory on EC2 where the app will be deployed
+        GIT_REPO_URL = 'https://github.com/your-repository/python-app.git'  // Your Git repository URL
+        PYTHON_VERSION = '3.8'  // Define the Python version (adjust if needed)
+        VENV_DIR = '/home/ubuntu/.virtualenvs/python-app'  // Directory for the virtual environment on EC2
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Checkout the code from your Git repository
+                git url: "${GIT_REPO_URL}", branch: 'main'
+            }
+        }
+
+        stage('Install SSH Client') {
+            steps {
+                // Install the SSH client on the Jenkins agent (only necessary if SSH is not installed)
+                sh 'sudo apt-get update && sudo apt-get install -y sshpass'
+            }
+        }
+
+        stage('Install Python and Pip') {
+            steps {
+                // Install Python and Pip on the Jenkins agent (if not already installed)
+                sh 'sudo apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-dev'
+                sh 'curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py'
+                sh 'python${PYTHON_VERSION} get-pip.py'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                // Create a virtual environment and install the Python dependencies
+                sh """
+                    python${PYTHON_VERSION} -m venv ${VENV_DIR}
+                    source ${VENV_DIR}/bin/activate
+                    pip install -r requirements.txt
+                """
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                script {
+                    // Use SSH to connect to the EC2 instance and deploy the Python app
+                    sh """
+                        ssh -o StrictHostKeyChecking=no -i ${EC2_SSH_KEY} ${EC2_SSH_USER}@${EC2_SSH_HOST} '
+                        cd ${REMOTE_DIR} || git clone ${GIT_REPO_URL} ${REMOTE_DIR}
+                        cd ${REMOTE_DIR}
+                        git pull  # Pull the latest code
+                        cp .env.example .env  # Copy the example .env file (adjust if needed)
+                        echo "DB_PASSWORD=${DB_PASSWORD}" >> .env  # Inject the DB_PASSWORD from secrets into .env
+                        source ${VENV_DIR}/bin/activate  # Activate the virtual environment
+                        pip install -r requirements.txt  # Install dependencies
+                        # Restart the application server (e.g., Gunicorn, Flask, or Django)
+                        sudo systemctl restart gunicorn  # Adjust to the actual server you're using
+                        '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful!"
+        }
+        failure {
+            echo "Deployment failed!"
+        }
+    }
+}
