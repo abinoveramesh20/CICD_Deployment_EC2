@@ -1,4 +1,4 @@
-##Steps to Store Sensitive Information as Secrets in Jenkins
+Steps to Store Sensitive Information as Secrets in Jenkins
 ---
 1. Access Jenkins Credentials Section
 Open your Jenkins dashboard in a web browser.
