@@ -37,3 +37,8 @@ Now your sensitive information is securely stored in Jenkins and can be accessed
 ---
 
 
+
+
+Check with https://github.com/jenkins-docs
+
+
